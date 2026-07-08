@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+
+# Local generated study artifacts
+projects/
+outputs/
+recordings/
+*.mp4
+*.m4v
+*.mov
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.ass
+*.srt
+*.vtt
+
+# Download/auth/runtime artifacts
+cookies.txt
+*.log
+whispercpp/
+models/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
