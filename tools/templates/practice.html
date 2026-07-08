@@ -94,6 +94,7 @@
       border-radius: 8px;
       overflow: hidden;
       box-shadow: var(--shadow);
+      position: relative;
     }
 
     video {
@@ -101,6 +102,45 @@
       width: 100%;
       aspect-ratio: 16 / 9;
       background: #111;
+    }
+
+    .video-captions {
+      position: absolute;
+      left: 5%;
+      right: 5%;
+      bottom: 46px;
+      display: grid;
+      gap: 6px;
+      text-align: center;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 120ms ease;
+    }
+
+    .video-captions.hidden {
+      opacity: 0;
+    }
+
+    .caption-en, .caption-zh {
+      margin: 0 auto;
+      max-width: 100%;
+      color: #fff;
+      font-weight: 800;
+      line-height: 1.25;
+      text-shadow:
+        -2px -2px 0 #111,
+        2px -2px 0 #111,
+        -2px 2px 0 #111,
+        2px 2px 0 #111,
+        0 3px 10px rgba(0, 0, 0, 0.72);
+    }
+
+    .caption-en {
+      font-size: 27px;
+    }
+
+    .caption-zh {
+      font-size: 25px;
     }
 
     .toolbar, .recording, .feedback-head, .filters, .status-line {
@@ -365,6 +405,20 @@
         border-left: 0;
         border-top: 1px solid var(--line);
       }
+
+      .video-captions {
+        left: 4%;
+        right: 4%;
+        bottom: 40px;
+      }
+
+      .caption-en {
+        font-size: 18px;
+      }
+
+      .caption-zh {
+        font-size: 17px;
+      }
     }
   </style>
 </head>
@@ -372,7 +426,11 @@
   <main class="app">
     <section class="stage">
       <div class="video-wrap">
-        <video id="video" src="bilingual.mp4" controls preload="metadata"></video>
+        <video id="video" controls preload="metadata"></video>
+        <div class="video-captions hidden" id="videoCaptions">
+          <div class="caption-en" id="captionEn"></div>
+          <div class="caption-zh" id="captionZh"></div>
+        </div>
       </div>
 
       <div class="toolbar">
@@ -431,6 +489,9 @@
     const SEGMENTS = __SEGMENTS_JSON__;
     const META = __PROJECT_META_JSON__;
     const video = document.getElementById("video");
+    const videoCaptions = document.getElementById("videoCaptions");
+    const captionEn = document.getElementById("captionEn");
+    const captionZh = document.getElementById("captionZh");
     const segmentList = document.getElementById("segments");
     const currentEn = document.getElementById("currentEn");
     const currentZh = document.getElementById("currentZh");
@@ -464,6 +525,7 @@
     let activeFilter = "all";
     let appState = { schemaVersion: 1, attempts: [], stars: [] };
 
+    video.src = encodeURI(META.practiceVideo || META.video || "bilingual.mp4");
     projectTitle.textContent = META.title || "Practice English";
     serverState.textContent = location.protocol === "file:"
       ? "本地文件模式：可播放和录音；评分请用 serve_practice.py 启动。"
@@ -623,6 +685,7 @@
       if (jump) {
         video.currentTime = seg.start;
       }
+      renderVideoCaptions();
     }
 
     function updateActiveSegment() {
@@ -679,6 +742,7 @@
     video.addEventListener("timeupdate", () => {
       const seg = currentSegment();
       if (!seg) return;
+      renderVideoCaptions();
       if (loop && video.currentTime >= seg.end) {
         video.currentTime = seg.start;
         video.play();
@@ -686,6 +750,9 @@
         video.pause();
       }
     });
+    video.addEventListener("loadedmetadata", renderVideoCaptions);
+    video.addEventListener("seeked", renderVideoCaptions);
+    video.addEventListener("play", renderVideoCaptions);
 
     playSegmentBtn.addEventListener("click", playCurrent);
     loopSegmentBtn.addEventListener("click", () => {
@@ -885,6 +952,23 @@
         span.textContent = token.text;
         diff.appendChild(span);
       });
+    }
+
+    function segmentAtTime(time) {
+      return SEGMENTS.find(seg => time >= seg.start - 0.08 && time <= seg.end + 0.08) || null;
+    }
+
+    function renderVideoCaptions() {
+      const seg = segmentAtTime(video.currentTime) || currentSegment();
+      if (!seg) {
+        videoCaptions.classList.add("hidden");
+        captionEn.textContent = "";
+        captionZh.textContent = "";
+        return;
+      }
+      captionEn.textContent = seg.english;
+      captionZh.textContent = seg.chinese || "";
+      videoCaptions.classList.toggle("hidden", !seg.english && !seg.chinese);
     }
 
     function setNotice(message, level = "warn") {

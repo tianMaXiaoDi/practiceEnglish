@@ -31,6 +31,7 @@ Practice English 是一个本地优先的英语学习项目，核心素材来自
 projects/
   video-name/
     source.mp4
+    practice.mp4
     bilingual.mp4
     segments.json
     study.tsv
@@ -62,10 +63,13 @@ projects/
 - 使用 `whisper.cpp` 生成英文转写
 - 生成英文 + 中文 `.ass` 字幕
 - 输出烧录双语字幕的 MP4 视频
+- 输出练习页使用的干净 MP4 视频
 
 现在这条流水线已经开始扩展为学习包生成器，额外输出：
 
 - `segments.json`：逐句时间戳、英文、中文
+- `practice.mp4`：练习页播放的视频，字幕由页面实时叠加
+- `bilingual.mp4`：可单独观看或发布的烧录双语字幕视频
 - `study.tsv`：逐句学习表
 - `anki.csv`：可导入 Anki 的句子卡片
 - `practice.html`：本地跟读练习页面

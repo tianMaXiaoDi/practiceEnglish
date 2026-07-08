@@ -17,6 +17,83 @@ from pathlib import Path
 WHISPERCPP_URL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.9.1/whisper-bin-x64.zip"
 MODEL_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin?download=true"
 MODEL_FILE = "ggml-tiny.en-q5_1.bin"
+MIN_SEGMENT_WORDS = 6
+MAX_SEGMENT_WORDS = 30
+MAX_SEGMENT_DURATION_MS = 10000
+MAX_SEGMENT_GAP_MS = 1200
+CONTINUATION_STARTS = {
+    "and",
+    "or",
+    "but",
+    "because",
+    "so",
+    "then",
+    "that",
+    "which",
+    "who",
+    "where",
+    "when",
+    "while",
+    "if",
+    "to",
+    "at",
+    "in",
+    "on",
+    "for",
+    "with",
+    "from",
+    "by",
+    "of",
+    "as",
+    "than",
+    "until",
+    "unless",
+}
+CONTINUATION_ENDS = {
+    "a",
+    "an",
+    "the",
+    "and",
+    "or",
+    "but",
+    "because",
+    "if",
+    "when",
+    "where",
+    "which",
+    "that",
+    "who",
+    "to",
+    "of",
+    "for",
+    "with",
+    "from",
+    "by",
+    "in",
+    "on",
+    "at",
+    "as",
+    "than",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "do",
+    "does",
+    "did",
+    "have",
+    "has",
+    "had",
+    "will",
+    "would",
+    "can",
+    "could",
+    "should",
+    "going",
+}
 
 
 def run(cmd, cwd=None):
@@ -270,6 +347,29 @@ def burn_subtitles(ffmpeg, source, ass, output, start=None, duration=None):
     run(cmd)
 
 
+def make_practice_video(ffmpeg, source, output, start=None, duration=None):
+    cmd = [ffmpeg, "-y"]
+    if start is not None:
+        cmd += ["-ss", str(start)]
+    cmd += ["-i", source]
+    if duration is not None:
+        cmd += ["-t", str(duration)]
+    cmd += [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "20",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        output,
+    ]
+    run(cmd)
+
+
 def preview_frame(ffmpeg, output, preview):
     run([ffmpeg, "-y", "-ss", "1", "-i", output, "-vframes", "1", preview])
 
@@ -289,24 +389,117 @@ def clean_filename(value):
     return value[:80] or "video"
 
 
-def rows_from_whisper_json(json_path):
+def clean_transcript_text(value):
+    return " ".join((value or "").split())
+
+
+def words_in(value):
+    return re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", value or "")
+
+
+def word_count(value):
+    return len(words_in(value))
+
+
+def sentence_ended(value):
+    return bool(re.search(r"[.!?][\"')\]]*$", (value or "").strip()))
+
+
+def first_word(value):
+    words = words_in(value)
+    return words[0].lower() if words else ""
+
+
+def last_word(value):
+    words = words_in(value)
+    return words[-1].lower() if words else ""
+
+
+def merge_text(left, right):
+    left = clean_transcript_text(left)
+    right = clean_transcript_text(right)
+    if not left:
+        return right
+    if not right:
+        return left
+    return f"{left} {right}"
+
+
+def can_merge_rows(current, nxt):
+    combined_words = word_count(current["en"]) + word_count(nxt["en"])
+    combined_duration = int(nxt["end"]) - int(current["start"])
+    gap = int(nxt["start"]) - int(current["end"])
+    if gap > MAX_SEGMENT_GAP_MS:
+        return False
+    if combined_words > MAX_SEGMENT_WORDS or combined_duration > MAX_SEGMENT_DURATION_MS:
+        return False
+    if word_count(current["en"]) < MIN_SEGMENT_WORDS:
+        return True
+    if sentence_ended(current["en"]):
+        return False
+    if last_word(current["en"]) in CONTINUATION_ENDS:
+        return True
+    if first_word(nxt["en"]) in CONTINUATION_STARTS:
+        return True
+    if word_count(nxt["en"]) < MIN_SEGMENT_WORDS and not sentence_ended(nxt["en"]):
+        return True
+    return False
+
+
+def merge_transcript_rows(rows):
+    merged = []
+    current = None
+    for row in rows:
+        if current is None:
+            current = dict(row)
+            current["sourceCount"] = 1
+            continue
+        if can_merge_rows(current, row):
+            current["end"] = row["end"]
+            current["en"] = merge_text(current["en"], row["en"])
+            current["sourceCount"] += 1
+        else:
+            merged.append(current)
+            current = dict(row)
+            current["sourceCount"] = 1
+    if current is not None:
+        merged.append(current)
+    return merged
+
+
+def rows_from_whisper_json(json_path, max_end_ms=None):
     data = json.loads(json_path.read_text(encoding="utf-8"))
     items = data.get("transcription", [])
-    english = [" ".join((item.get("text") or "").split()) for item in items]
-    chinese = translate_lines(english)
-    rows = []
-    for i, item in enumerate(items):
-        if not english[i]:
+    raw_rows = []
+    for item in items:
+        english = clean_transcript_text(item.get("text"))
+        if not english:
             continue
         offsets = item.get("offsets", {})
+        start = int(offsets.get("from", 0))
+        end = int(offsets.get("to", 0))
+        if max_end_ms is not None:
+            if start >= max_end_ms:
+                continue
+            end = min(end, max_end_ms)
+        if end <= start:
+            continue
+        raw_rows.append({"start": start, "end": end, "en": english})
+
+    merged_rows = merge_transcript_rows(raw_rows)
+    english = [row["en"] for row in merged_rows]
+    chinese = translate_lines(english)
+    rows = []
+    for i, item in enumerate(merged_rows):
         rows.append(
             {
                 "id": f"s{i + 1:04d}",
                 "index": i + 1,
-                "start": int(offsets.get("from", 0)),
-                "end": int(offsets.get("to", 0)),
-                "en": english[i],
+                "start": int(item["start"]),
+                "end": int(item["end"]),
+                "en": item["en"],
                 "zh": chinese[i],
+                "sourceCount": item.get("sourceCount", 1),
             }
         )
     return rows
@@ -330,6 +523,7 @@ def build_segments(rows):
                 "endText": seconds_to_stamp(end_ms / 1000),
                 "english": row["en"],
                 "chinese": row["zh"],
+                "sourceCount": row.get("sourceCount", 1),
             }
         )
     return segments
@@ -425,18 +619,21 @@ def main():
     title = args.project_title or clean_filename(Path(source).stem if args.input else args.url)
     wav = out_dir / "audio.wav"
     ass = out_dir / "bilingual.ass"
+    practice_video = out_dir / "practice.mp4"
     output = args.output.resolve() if args.output else out_dir / "bilingual.mp4"
     preview = out_dir / "preview.jpg"
 
     make_wav(ffmpeg, source, wav, start=args.start, duration=args.duration)
     whisper_cli, model = ensure_whispercpp(out_dir, args.whispercpp_dir, args.model_url, args.model_file)
     json_path = transcribe_with_whispercpp(whisper_cli, model, wav, out_dir / "transcript", language="en")
-    rows = rows_from_whisper_json(json_path)
+    max_end_ms = int(args.duration * 1000) if args.duration is not None else None
+    rows = rows_from_whisper_json(json_path, max_end_ms=max_end_ms)
     segments = build_segments(rows)
     meta = {
         "title": title,
         "source": str(project_source.name if not args.no_copy_source else Path(source).resolve()),
         "video": output.name,
+        "practiceVideo": practice_video.name,
         "start": args.start or 0,
         "duration": args.duration,
         "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -448,9 +645,11 @@ def main():
     write_attempts_seed(out_dir / "attempts.json")
     (out_dir / "recordings").mkdir(exist_ok=True)
     write_practice_html(out_dir / "practice.html", segments, meta)
+    make_practice_video(ffmpeg, source, practice_video, start=args.start, duration=args.duration)
     burn_subtitles(ffmpeg, source, ass, output, start=args.start, duration=args.duration)
     preview_frame(ffmpeg, output, preview)
 
+    print(f"Wrote practice video: {practice_video}", flush=True)
     print(f"Wrote video: {output}", flush=True)
     print(f"Wrote subtitles: {ass}", flush=True)
     print(f"Wrote segments: {out_dir / 'segments.json'}", flush=True)
