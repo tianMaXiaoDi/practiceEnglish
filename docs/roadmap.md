@@ -20,6 +20,8 @@ Acceptance:
 - A YouTube URL or local MP4 produces a complete project folder.
 - `segments.json` has start time, end time, English, and Chinese for every sentence.
 
+Status: first implementation started. The generator now writes `bilingual.mp4`, `segments.json`, `study.tsv`, `anki.csv`, `attempts.json`, and `practice.html`.
+
 ## Milestone 2: Local Practice Page
 
 Generate `practice.html` for each video project.
@@ -32,6 +34,8 @@ Acceptance:
 - Play a single sentence.
 - Loop a sentence.
 
+Status: first implementation started. The generated page supports video playback, sentence selection, single-sentence playback, loop, and speed control.
+
 ## Milestone 3: Recording And Replay
 
 Add browser recording to `practice.html`.
@@ -43,6 +47,8 @@ Acceptance:
 - Replay the learner recording.
 - Preserve attempts in `attempts.json`.
 
+Status: first implementation started. Browser recording is available in `practice.html`; persistence requires `tools/serve_practice.py`.
+
 ## Milestone 4: Text-Level Speech Check
 
 Add local transcription and text comparison for learner recordings.
@@ -53,6 +59,8 @@ Acceptance:
 - Compare with target sentence.
 - Show missing, extra, and changed words.
 - Save score per attempt.
+
+Status: first implementation started. `tools/serve_practice.py` accepts recordings, uses `whisper.cpp`, compares words, returns a score, and appends `attempts.json`.
 
 ## Milestone 5: Review Mode
 

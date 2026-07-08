@@ -1,8 +1,10 @@
 import argparse
+import csv
 import html
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -24,6 +26,10 @@ def run(cmd, cwd=None):
 
 def run_capture(cmd):
     return subprocess.check_output([str(x) for x in cmd], text=True, stderr=subprocess.STDOUT).strip()
+
+
+def script_dir():
+    return Path(__file__).resolve().parent
 
 
 def find_exe(name):
@@ -265,7 +271,22 @@ def burn_subtitles(ffmpeg, source, ass, output, start=None, duration=None):
 
 
 def preview_frame(ffmpeg, output, preview):
-    run([ffmpeg, "-y", "-ss", "10", "-i", output, "-vframes", "1", preview])
+    run([ffmpeg, "-y", "-ss", "1", "-i", output, "-vframes", "1", preview])
+
+
+def seconds_to_stamp(seconds):
+    seconds = max(0, float(seconds))
+    h = int(seconds // 3600)
+    m = int((seconds % 3600) // 60)
+    s = int(seconds % 60)
+    ms = int(round((seconds - math.floor(seconds)) * 1000))
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms:03d}"
+
+
+def clean_filename(value):
+    value = re.sub(r"https?://", "", value or "video", flags=re.I)
+    value = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff._-]+", "-", value).strip("-._")
+    return value[:80] or "video"
 
 
 def rows_from_whisper_json(json_path):
@@ -280,6 +301,8 @@ def rows_from_whisper_json(json_path):
         offsets = item.get("offsets", {})
         rows.append(
             {
+                "id": f"s{i + 1:04d}",
+                "index": i + 1,
                 "start": int(offsets.get("from", 0)),
                 "end": int(offsets.get("to", 0)),
                 "en": english[i],
@@ -289,12 +312,88 @@ def rows_from_whisper_json(json_path):
     return rows
 
 
+def build_segments(rows):
+    segments = []
+    for row in rows:
+        start_ms = int(row["start"])
+        end_ms = int(row["end"])
+        segments.append(
+            {
+                "id": row["id"],
+                "index": row["index"],
+                "startMs": start_ms,
+                "endMs": end_ms,
+                "start": start_ms / 1000,
+                "end": end_ms / 1000,
+                "duration": max(0, end_ms - start_ms) / 1000,
+                "startText": seconds_to_stamp(start_ms / 1000),
+                "endText": seconds_to_stamp(end_ms / 1000),
+                "english": row["en"],
+                "chinese": row["zh"],
+            }
+        )
+    return segments
+
+
+def write_segments(path, segments, meta):
+    payload = {
+        "schemaVersion": 1,
+        "meta": meta,
+        "segments": segments,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def write_study_tsv(path, segments):
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f, delimiter="\t")
+        writer.writerow(["index", "start", "end", "english", "chinese", "notes"])
+        for seg in segments:
+            writer.writerow([seg["index"], seg["startText"], seg["endText"], seg["english"], seg["chinese"], ""])
+
+
+def write_anki_csv(path, segments):
+    with path.open("w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["English", "Chinese", "Time", "Tags"])
+        for seg in segments:
+            writer.writerow([seg["english"], seg["chinese"], seg["startText"], "practiceEnglish"])
+
+
+def write_attempts_seed(path):
+    if not path.exists():
+        path.write_text(
+            json.dumps({"schemaVersion": 1, "attempts": [], "stars": []}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+
+def write_practice_html(path, segments, meta):
+    template = script_dir() / "templates" / "practice.html"
+    if not template.exists():
+        raise SystemExit(f"practice.html template not found: {template}")
+    content = template.read_text(encoding="utf-8")
+    content = content.replace("__SEGMENTS_JSON__", json.dumps(segments, ensure_ascii=False))
+    content = content.replace("__PROJECT_META_JSON__", json.dumps(meta, ensure_ascii=False))
+    path.write_text(content, encoding="utf-8")
+
+
+def copy_source_to_project(source, out_dir):
+    target = out_dir / "source.mp4"
+    source = Path(source).resolve()
+    if source == target.resolve():
+        return target
+    if not target.exists():
+        shutil.copy2(source, target)
+    return target
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Create burned English + Chinese subtitles for YouTube/local videos.")
+    parser = argparse.ArgumentParser(description="Create a local English study pack from YouTube/local videos.")
     src = parser.add_mutually_exclusive_group(required=True)
     src.add_argument("--url")
     src.add_argument("--input", type=Path)
-    parser.add_argument("--output-dir", type=Path, default=Path("youtube_bilingual_subtitles"))
+    parser.add_argument("--output-dir", type=Path, default=Path("projects") / "study-pack")
     parser.add_argument("--output", type=Path)
     parser.add_argument("--start", type=float)
     parser.add_argument("--duration", type=float)
@@ -304,6 +403,8 @@ def main():
     parser.add_argument("--whispercpp-dir", type=Path)
     parser.add_argument("--model-url", default=MODEL_URL)
     parser.add_argument("--model-file", default=MODEL_FILE)
+    parser.add_argument("--project-title")
+    parser.add_argument("--no-copy-source", action="store_true")
     args = parser.parse_args()
 
     out_dir = args.output_dir.resolve()
@@ -320,22 +421,42 @@ def main():
         if not source.exists():
             raise SystemExit(f"Input video not found: {source}")
 
-    label = f"bilingual_from_{int(args.start)}s" if args.start is not None else "bilingual"
-    wav = out_dir / f"{label}.wav"
-    ass = out_dir / f"{label}.ass"
-    output = args.output.resolve() if args.output else out_dir / f"{label}.mp4"
-    preview = out_dir / "preview_10s.jpg"
+    project_source = source if args.no_copy_source else copy_source_to_project(source, out_dir)
+    title = args.project_title or clean_filename(Path(source).stem if args.input else args.url)
+    wav = out_dir / "audio.wav"
+    ass = out_dir / "bilingual.ass"
+    output = args.output.resolve() if args.output else out_dir / "bilingual.mp4"
+    preview = out_dir / "preview.jpg"
 
     make_wav(ffmpeg, source, wav, start=args.start, duration=args.duration)
     whisper_cli, model = ensure_whispercpp(out_dir, args.whispercpp_dir, args.model_url, args.model_file)
-    json_path = transcribe_with_whispercpp(whisper_cli, model, wav, out_dir / f"{label}_whisper", language="en")
+    json_path = transcribe_with_whispercpp(whisper_cli, model, wav, out_dir / "transcript", language="en")
     rows = rows_from_whisper_json(json_path)
+    segments = build_segments(rows)
+    meta = {
+        "title": title,
+        "source": str(project_source.name if not args.no_copy_source else Path(source).resolve()),
+        "video": output.name,
+        "start": args.start or 0,
+        "duration": args.duration,
+        "createdAt": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+    }
     write_ass(ass, rows)
+    write_segments(out_dir / "segments.json", segments, meta)
+    write_study_tsv(out_dir / "study.tsv", segments)
+    write_anki_csv(out_dir / "anki.csv", segments)
+    write_attempts_seed(out_dir / "attempts.json")
+    (out_dir / "recordings").mkdir(exist_ok=True)
+    write_practice_html(out_dir / "practice.html", segments, meta)
     burn_subtitles(ffmpeg, source, ass, output, start=args.start, duration=args.duration)
     preview_frame(ffmpeg, output, preview)
 
     print(f"Wrote video: {output}", flush=True)
     print(f"Wrote subtitles: {ass}", flush=True)
+    print(f"Wrote segments: {out_dir / 'segments.json'}", flush=True)
+    print(f"Wrote study table: {out_dir / 'study.tsv'}", flush=True)
+    print(f"Wrote Anki CSV: {out_dir / 'anki.csv'}", flush=True)
+    print(f"Wrote practice page: {out_dir / 'practice.html'}", flush=True)
     print(f"Wrote preview: {preview}", flush=True)
 
 

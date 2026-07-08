@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Practice English</title>
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --panel: #ffffff;
+      --ink: #171717;
+      --muted: #6b6b62;
+      --line: #d8d8cf;
+      --accent: #176b87;
+      --accent-ink: #ffffff;
+      --warn: #a64220;
+      --good: #257044;
+      --shadow: 0 14px 40px rgba(20, 20, 20, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, "Microsoft YaHei", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button, select {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--ink);
+      border-radius: 6px;
+      min-height: 36px;
+      padding: 0 12px;
+      cursor: pointer;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    button.danger {
+      border-color: var(--warn);
+      color: var(--warn);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(520px, 1fr) minmax(380px, 520px);
+      gap: 0;
+    }
+
+    .stage {
+      padding: 20px;
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .video-wrap {
+      background: #111;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    video {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #111;
+    }
+
+    .toolbar, .recording, .feedback-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toolbar {
+      padding: 12px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .current {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 180px;
+    }
+
+    .current .en {
+      font-size: 24px;
+      line-height: 1.35;
+      font-weight: 700;
+    }
+
+    .current .zh {
+      margin-top: 10px;
+      font-size: 18px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .recording {
+      margin-top: 14px;
+    }
+
+    .side {
+      border-left: 1px solid var(--line);
+      background: #fbfbf8;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) minmax(240px, 36vh);
+      min-width: 0;
+    }
+
+    .side-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .side-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .segments {
+      overflow: auto;
+    }
+
+    .segment {
+      width: 100%;
+      display: block;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      padding: 12px 16px;
+      min-height: 74px;
+      background: transparent;
+    }
+
+    .segment:hover, .segment.active {
+      background: #eaf3f5;
+    }
+
+    .segment .time {
+      font-size: 12px;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+
+    .segment .text {
+      font-size: 15px;
+      line-height: 1.35;
+      font-weight: 700;
+    }
+
+    .segment .sub {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .feedback {
+      border-top: 1px solid var(--line);
+      padding: 14px 16px;
+      overflow: auto;
+      background: var(--panel);
+    }
+
+    .score {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--accent);
+    }
+
+    .diff {
+      margin-top: 10px;
+      line-height: 1.8;
+    }
+
+    .token {
+      display: inline-block;
+      margin: 0 4px 6px 0;
+      padding: 2px 6px;
+      border-radius: 5px;
+      background: #eeeeea;
+    }
+
+    .token.missing {
+      background: #fde7dd;
+      color: var(--warn);
+      text-decoration: line-through;
+    }
+
+    .token.extra {
+      background: #e1f0e7;
+      color: var(--good);
+    }
+
+    audio {
+      width: min(420px, 100%);
+      height: 36px;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        height: auto;
+        min-height: 100vh;
+        grid-template-columns: 1fr;
+      }
+
+      .side {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="stage">
+      <div class="video-wrap">
+        <video id="video" src="bilingual.mp4" controls preload="metadata"></video>
+      </div>
+
+      <div class="toolbar">
+        <button id="playSegment" class="primary">播放本句</button>
+        <button id="loopSegment">循环本句</button>
+        <button id="prevSegment">上一句</button>
+        <button id="nextSegment">下一句</button>
+        <select id="rate">
+          <option value="0.75">0.75x</option>
+          <option value="0.85">0.85x</option>
+          <option value="1" selected>1x</option>
+          <option value="1.15">1.15x</option>
+        </select>
+      </div>
+
+      <div class="current">
+        <div id="currentEn" class="en"></div>
+        <div id="currentZh" class="zh"></div>
+        <div class="recording">
+          <button id="record" class="primary">开始录音</button>
+          <button id="stop" class="danger" disabled>停止</button>
+          <button id="score" disabled>转写评分</button>
+          <audio id="mine" controls></audio>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="side-head">
+        <div class="side-title" id="projectTitle"></div>
+        <div class="meta" id="serverState"></div>
+      </div>
+      <div class="segments" id="segments"></div>
+      <div class="feedback">
+        <div class="feedback-head">
+          <div class="score" id="scoreValue">--</div>
+          <div class="meta" id="attemptMeta">尚未评分</div>
+        </div>
+        <div class="diff" id="diff"></div>
+        <div class="meta" id="transcript"></div>
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    const SEGMENTS = __SEGMENTS_JSON__;
+    const META = __PROJECT_META_JSON__;
+    const video = document.getElementById("video");
+    const segmentList = document.getElementById("segments");
+    const currentEn = document.getElementById("currentEn");
+    const currentZh = document.getElementById("currentZh");
+    const serverState = document.getElementById("serverState");
+    const projectTitle = document.getElementById("projectTitle");
+    const playSegmentBtn = document.getElementById("playSegment");
+    const loopSegmentBtn = document.getElementById("loopSegment");
+    const prevSegmentBtn = document.getElementById("prevSegment");
+    const nextSegmentBtn = document.getElementById("nextSegment");
+    const rate = document.getElementById("rate");
+    const recordBtn = document.getElementById("record");
+    const stopBtn = document.getElementById("stop");
+    const scoreBtn = document.getElementById("score");
+    const mine = document.getElementById("mine");
+    const scoreValue = document.getElementById("scoreValue");
+    const attemptMeta = document.getElementById("attemptMeta");
+    const diff = document.getElementById("diff");
+    const transcript = document.getElementById("transcript");
+
+    let currentIndex = 0;
+    let loop = false;
+    let recorder = null;
+    let chunks = [];
+    let latestBlob = null;
+
+    projectTitle.textContent = META.title || "Practice English";
+    serverState.textContent = location.protocol === "file:"
+      ? "本地文件模式：可播放和录音；评分请用 serve_practice.py 启动。"
+      : "本地服务模式：可录音并评分。";
+
+    function renderSegments() {
+      segmentList.innerHTML = "";
+      SEGMENTS.forEach((seg, index) => {
+        const item = document.createElement("button");
+        item.className = "segment";
+        item.innerHTML = `
+          <div class="time">${seg.startText} - ${seg.endText}</div>
+          <div class="text">${escapeHtml(seg.english)}</div>
+          <div class="sub">${escapeHtml(seg.chinese || "")}</div>
+        `;
+        item.addEventListener("click", () => selectSegment(index, true));
+        segmentList.appendChild(item);
+      });
+    }
+
+    function selectSegment(index, jump) {
+      currentIndex = Math.max(0, Math.min(SEGMENTS.length - 1, index));
+      const seg = SEGMENTS[currentIndex];
+      currentEn.textContent = seg.english;
+      currentZh.textContent = seg.chinese || "";
+      document.querySelectorAll(".segment").forEach((el, i) => {
+        el.classList.toggle("active", i === currentIndex);
+      });
+      if (jump) {
+        video.currentTime = seg.start;
+      }
+    }
+
+    function playCurrent() {
+      const seg = SEGMENTS[currentIndex];
+      video.currentTime = seg.start;
+      video.playbackRate = Number(rate.value);
+      video.play();
+    }
+
+    video.addEventListener("timeupdate", () => {
+      const seg = SEGMENTS[currentIndex];
+      if (!seg) return;
+      if (loop && video.currentTime >= seg.end) {
+        video.currentTime = seg.start;
+        video.play();
+      } else if (!loop && video.currentTime >= seg.end && video.currentTime - seg.end < 0.4) {
+        video.pause();
+      }
+    });
+
+    playSegmentBtn.addEventListener("click", playCurrent);
+    loopSegmentBtn.addEventListener("click", () => {
+      loop = !loop;
+      loopSegmentBtn.classList.toggle("primary", loop);
+      playCurrent();
+    });
+    prevSegmentBtn.addEventListener("click", () => selectSegment(currentIndex - 1, true));
+    nextSegmentBtn.addEventListener("click", () => selectSegment(currentIndex + 1, true));
+    rate.addEventListener("change", () => { video.playbackRate = Number(rate.value); });
+
+    recordBtn.addEventListener("click", async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      chunks = [];
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = event => {
+        if (event.data.size > 0) chunks.push(event.data);
+      };
+      recorder.onstop = () => {
+        latestBlob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+        mine.src = URL.createObjectURL(latestBlob);
+        scoreBtn.disabled = false;
+        stream.getTracks().forEach(track => track.stop());
+      };
+      recorder.start();
+      recordBtn.disabled = true;
+      stopBtn.disabled = false;
+      scoreBtn.disabled = true;
+    });
+
+    stopBtn.addEventListener("click", () => {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+      recordBtn.disabled = false;
+      stopBtn.disabled = true;
+    });
+
+    scoreBtn.addEventListener("click", async () => {
+      if (!latestBlob) return;
+      if (location.protocol === "file:") {
+        attemptMeta.textContent = "请用 serve_practice.py 启动本地服务后评分。";
+        return;
+      }
+      scoreBtn.disabled = true;
+      attemptMeta.textContent = "评分中...";
+      const seg = SEGMENTS[currentIndex];
+      const res = await fetch(`/api/attempts?segment_id=${encodeURIComponent(seg.id)}`, {
+        method: "POST",
+        headers: { "Content-Type": latestBlob.type || "audio/webm" },
+        body: latestBlob
+      });
+      const data = await res.json();
+      renderScore(data);
+      scoreBtn.disabled = false;
+    });
+
+    function renderScore(data) {
+      scoreValue.textContent = data.score ?? "--";
+      attemptMeta.textContent = data.createdAt ? `已保存：${data.createdAt}` : "已评分";
+      transcript.textContent = data.transcript ? `我的转写：${data.transcript}` : "";
+      diff.innerHTML = "";
+      (data.diff?.tokens || []).forEach(token => {
+        const span = document.createElement("span");
+        span.className = `token ${token.kind || ""}`;
+        span.textContent = token.text;
+        diff.appendChild(span);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    renderSegments();
+    selectSegment(0, false);
+  </script>
+</body>
+</html>
