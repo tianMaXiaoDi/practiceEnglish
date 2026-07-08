@@ -438,6 +438,7 @@
         <button id="loopSegment">循环本句</button>
         <button id="prevSegment">上一句</button>
         <button id="nextSegment">下一句</button>
+        <button id="pauseSegment">暂停</button>
         <select id="rate" aria-label="播放速度">
           <option value="0.75">0.75x</option>
           <option value="0.85">0.85x</option>
@@ -501,6 +502,7 @@
     const loopSegmentBtn = document.getElementById("loopSegment");
     const prevSegmentBtn = document.getElementById("prevSegment");
     const nextSegmentBtn = document.getElementById("nextSegment");
+    const pauseSegmentBtn = document.getElementById("pauseSegment");
     const rate = document.getElementById("rate");
     const recordBtn = document.getElementById("record");
     const stopBtn = document.getElementById("stop");
@@ -734,6 +736,24 @@
     function playCurrent() {
       const seg = currentSegment();
       if (!seg) return;
+      loop = false;
+      loopSegmentBtn.classList.remove("primary");
+      video.currentTime = seg.start;
+      video.playbackRate = Number(rate.value);
+      video.play();
+    }
+
+    function pauseCurrent() {
+      loop = false;
+      loopSegmentBtn.classList.remove("primary");
+      video.pause();
+    }
+
+    function loopCurrent() {
+      const seg = currentSegment();
+      if (!seg) return;
+      loop = true;
+      loopSegmentBtn.classList.add("primary");
       video.currentTime = seg.start;
       video.playbackRate = Number(rate.value);
       video.play();
@@ -755,13 +775,10 @@
     video.addEventListener("play", renderVideoCaptions);
 
     playSegmentBtn.addEventListener("click", playCurrent);
-    loopSegmentBtn.addEventListener("click", () => {
-      loop = !loop;
-      loopSegmentBtn.classList.toggle("primary", loop);
-      playCurrent();
-    });
+    loopSegmentBtn.addEventListener("click", loopCurrent);
     prevSegmentBtn.addEventListener("click", () => selectSegment(currentIndex - 1, true));
     nextSegmentBtn.addEventListener("click", () => selectSegment(currentIndex + 1, true));
+    pauseSegmentBtn.addEventListener("click", pauseCurrent);
     rate.addEventListener("change", () => { video.playbackRate = Number(rate.value); });
 
     recordBtn.addEventListener("click", async () => {
