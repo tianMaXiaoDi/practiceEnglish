@@ -57,7 +57,11 @@ def load_segments(project_dir):
 def load_attempts(path):
     if not path.exists():
         return {"schemaVersion": 1, "attempts": [], "stars": []}
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data.setdefault("schemaVersion", 1)
+    data.setdefault("attempts", [])
+    data.setdefault("stars", [])
+    return data
 
 
 def save_attempts(path, data):
@@ -163,6 +167,25 @@ def make_handler(project_dir, ffmpeg, whisper_cli, model):
 
         def do_POST(self):
             parsed = urlparse(self.path)
+            if parsed.path == "/api/stars":
+                query = parse_qs(parsed.query)
+                segment_id = (query.get("segment_id") or [""])[0]
+                if segment_id not in segments:
+                    self._json(400, {"error": f"unknown segment_id: {segment_id}"})
+                    return
+                data = load_attempts(attempts_path)
+                stars = set(data.get("stars", []))
+                if segment_id in stars:
+                    stars.remove(segment_id)
+                    starred = False
+                else:
+                    stars.add(segment_id)
+                    starred = True
+                data["stars"] = sorted(stars)
+                save_attempts(attempts_path, data)
+                self._json(200, {"segmentId": segment_id, "starred": starred, "state": data})
+                return
+
             if parsed.path != "/api/attempts":
                 self._json(404, {"error": "not found"})
                 return

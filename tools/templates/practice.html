@@ -8,13 +8,18 @@
     :root {
       --bg: #f7f7f4;
       --panel: #ffffff;
+      --panel-soft: #fbfbf8;
       --ink: #171717;
       --muted: #6b6b62;
       --line: #d8d8cf;
       --accent: #176b87;
+      --accent-soft: #eaf3f5;
       --accent-ink: #ffffff;
       --warn: #a64220;
+      --warn-soft: #fde7dd;
       --good: #257044;
+      --good-soft: #e1f0e7;
+      --mark: #b7860b;
       --shadow: 0 14px 40px rgba(20, 20, 20, 0.08);
     }
 
@@ -40,6 +45,7 @@
       min-height: 36px;
       padding: 0 12px;
       cursor: pointer;
+      white-space: nowrap;
     }
 
     button.primary {
@@ -58,11 +64,20 @@
       cursor: not-allowed;
     }
 
+    select {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 10px;
+    }
+
     .app {
       height: 100vh;
       display: grid;
       grid-template-columns: minmax(520px, 1fr) minmax(380px, 520px);
-      gap: 0;
+      min-width: 0;
     }
 
     .stage {
@@ -71,6 +86,7 @@
       grid-template-rows: auto auto 1fr;
       gap: 14px;
       min-width: 0;
+      min-height: 0;
     }
 
     .video-wrap {
@@ -87,7 +103,7 @@
       background: #111;
     }
 
-    .toolbar, .recording, .feedback-head {
+    .toolbar, .recording, .feedback-head, .filters, .status-line {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -106,7 +122,8 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 16px;
-      min-height: 180px;
+      min-height: 188px;
+      overflow: auto;
     }
 
     .current .en {
@@ -128,10 +145,11 @@
 
     .side {
       border-left: 1px solid var(--line);
-      background: #fbfbf8;
+      background: var(--panel-soft);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) minmax(240px, 36vh);
       min-width: 0;
+      min-height: 0;
     }
 
     .side-head {
@@ -151,6 +169,50 @@
       line-height: 1.5;
     }
 
+    .filters {
+      margin-top: 12px;
+    }
+
+    .filter {
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: 13px;
+    }
+
+    .filter.active {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-ink);
+    }
+
+    .status-line {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #eeeeea;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .pill.good {
+      background: var(--good-soft);
+      color: var(--good);
+    }
+
+    .pill.warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
     .segments {
       overflow: auto;
     }
@@ -165,10 +227,26 @@
       padding: 12px 16px;
       min-height: 74px;
       background: transparent;
+      white-space: normal;
     }
 
     .segment:hover, .segment.active {
-      background: #eaf3f5;
+      background: var(--accent-soft);
+    }
+
+    .segment.weak {
+      border-left: 4px solid var(--warn);
+      padding-left: 12px;
+    }
+
+    .segment.practiced {
+      border-left: 4px solid var(--good);
+      padding-left: 12px;
+    }
+
+    .segment.starred .text::before {
+      content: "★ ";
+      color: var(--mark);
     }
 
     .segment .time {
@@ -190,6 +268,20 @@
       line-height: 1.35;
     }
 
+    .segment .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .empty {
+      padding: 18px 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
     .feedback {
       border-top: 1px solid var(--line);
       padding: 14px 16px;
@@ -201,11 +293,41 @@
       font-size: 28px;
       font-weight: 800;
       color: var(--accent);
+      min-width: 48px;
     }
 
     .diff {
       margin-top: 10px;
       line-height: 1.8;
+    }
+
+    .history {
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .history-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid #ecece6;
+      padding: 6px 0;
+    }
+
+    .notice {
+      margin-top: 10px;
+      color: var(--warn);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 18px;
+    }
+
+    .notice.info {
+      color: var(--accent);
     }
 
     .token {
@@ -217,13 +339,13 @@
     }
 
     .token.missing {
-      background: #fde7dd;
+      background: var(--warn-soft);
       color: var(--warn);
       text-decoration: line-through;
     }
 
     .token.extra {
-      background: #e1f0e7;
+      background: var(--good-soft);
       color: var(--good);
     }
 
@@ -258,7 +380,7 @@
         <button id="loopSegment">循环本句</button>
         <button id="prevSegment">上一句</button>
         <button id="nextSegment">下一句</button>
-        <select id="rate">
+        <select id="rate" aria-label="播放速度">
           <option value="0.75">0.75x</option>
           <option value="0.85">0.85x</option>
           <option value="1" selected>1x</option>
@@ -269,12 +391,15 @@
       <div class="current">
         <div id="currentEn" class="en"></div>
         <div id="currentZh" class="zh"></div>
+        <div class="status-line" id="currentStats"></div>
         <div class="recording">
           <button id="record" class="primary">开始录音</button>
           <button id="stop" class="danger" disabled>停止</button>
           <button id="score" disabled>转写评分</button>
+          <button id="star">收藏本句</button>
           <audio id="mine" controls></audio>
         </div>
+        <div class="notice" id="recordingNotice"></div>
       </div>
     </section>
 
@@ -282,6 +407,12 @@
       <div class="side-head">
         <div class="side-title" id="projectTitle"></div>
         <div class="meta" id="serverState"></div>
+        <div class="filters">
+          <button class="filter active" data-filter="all">全部</button>
+          <button class="filter" data-filter="weak">低分</button>
+          <button class="filter" data-filter="starred">收藏</button>
+          <button class="filter" data-filter="practiced">已练</button>
+        </div>
       </div>
       <div class="segments" id="segments"></div>
       <div class="feedback">
@@ -291,6 +422,7 @@
         </div>
         <div class="diff" id="diff"></div>
         <div class="meta" id="transcript"></div>
+        <div class="history" id="history"></div>
       </div>
     </aside>
   </main>
@@ -312,60 +444,240 @@
     const recordBtn = document.getElementById("record");
     const stopBtn = document.getElementById("stop");
     const scoreBtn = document.getElementById("score");
+    const starBtn = document.getElementById("star");
     const mine = document.getElementById("mine");
     const scoreValue = document.getElementById("scoreValue");
     const attemptMeta = document.getElementById("attemptMeta");
     const diff = document.getElementById("diff");
     const transcript = document.getElementById("transcript");
+    const history = document.getElementById("history");
+    const currentStats = document.getElementById("currentStats");
+    const recordingNotice = document.getElementById("recordingNotice");
 
     let currentIndex = 0;
     let loop = false;
     let recorder = null;
     let chunks = [];
     let latestBlob = null;
+    let recordingSegmentId = null;
+    let recordingStream = null;
+    let activeFilter = "all";
+    let appState = { schemaVersion: 1, attempts: [], stars: [] };
 
     projectTitle.textContent = META.title || "Practice English";
     serverState.textContent = location.protocol === "file:"
       ? "本地文件模式：可播放和录音；评分请用 serve_practice.py 启动。"
-      : "本地服务模式：可录音并评分。";
+      : "本地服务模式：可录音、评分并保存记录。";
+
+    document.querySelectorAll(".filter").forEach(button => {
+      button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        document.querySelectorAll(".filter").forEach(item => {
+          item.classList.toggle("active", item === button);
+        });
+        renderSegments();
+        if (SEGMENTS.length && !includeSegment(currentSegment())) {
+          const nextIndex = firstVisibleIndex();
+          if (nextIndex >= 0) selectSegment(nextIndex, false);
+        } else {
+          updateActiveSegment();
+        }
+      });
+    });
+
+    async function loadState() {
+      if (location.protocol === "file:") {
+        renderSegments();
+        selectSegment(0, false);
+        return;
+      }
+      try {
+        const response = await fetch("/api/state");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        appState = normalizeState(await response.json());
+      } catch (error) {
+        setNotice(`读取练习记录失败：${error.message}`);
+      }
+      renderSegments();
+      selectSegment(0, false);
+    }
+
+    function normalizeState(state) {
+      return {
+        schemaVersion: state?.schemaVersion || 1,
+        attempts: Array.isArray(state?.attempts) ? state.attempts : [],
+        stars: Array.isArray(state?.stars) ? state.stars : [],
+      };
+    }
+
+    function currentSegment() {
+      return SEGMENTS[currentIndex] || null;
+    }
+
+    function attemptsFor(segmentId) {
+      return (appState.attempts || []).filter(item => item.segmentId === segmentId);
+    }
+
+    function isStarred(segmentId) {
+      return (appState.stars || []).includes(segmentId);
+    }
+
+    function statsFor(segmentId) {
+      const attempts = attemptsFor(segmentId);
+      const scores = attempts.map(item => Number(item.score)).filter(Number.isFinite);
+      const best = scores.length ? Math.max(...scores) : null;
+      const latest = scores.length ? scores[scores.length - 1] : null;
+      return {
+        attempts,
+        count: attempts.length,
+        best,
+        latest,
+        weak: best !== null && best < 80,
+        starred: isStarred(segmentId),
+      };
+    }
+
+    function includeSegment(seg) {
+      if (!seg) return false;
+      const stats = statsFor(seg.id);
+      if (activeFilter === "weak") return stats.weak;
+      if (activeFilter === "starred") return stats.starred;
+      if (activeFilter === "practiced") return stats.count > 0;
+      return true;
+    }
+
+    function firstVisibleIndex() {
+      return SEGMENTS.findIndex(includeSegment);
+    }
 
     function renderSegments() {
       segmentList.innerHTML = "";
+      let visibleCount = 0;
       SEGMENTS.forEach((seg, index) => {
+        if (!includeSegment(seg)) return;
+        visibleCount += 1;
+        const stats = statsFor(seg.id);
         const item = document.createElement("button");
-        item.className = "segment";
+        item.type = "button";
+        item.dataset.segmentId = seg.id;
+        item.className = [
+          "segment",
+          stats.starred ? "starred" : "",
+          stats.weak ? "weak" : "",
+          stats.count > 0 && !stats.weak ? "practiced" : "",
+        ].filter(Boolean).join(" ");
+        const scoreBadge = stats.best === null
+          ? ""
+          : `<span class="pill ${stats.best >= 80 ? "good" : "warn"}">最高 ${stats.best}</span>`;
+        const countBadge = stats.count
+          ? `<span class="pill">练习 ${stats.count} 次</span>`
+          : `<span class="pill">未练</span>`;
+        const starBadge = stats.starred ? `<span class="pill">已收藏</span>` : "";
         item.innerHTML = `
           <div class="time">${seg.startText} - ${seg.endText}</div>
           <div class="text">${escapeHtml(seg.english)}</div>
           <div class="sub">${escapeHtml(seg.chinese || "")}</div>
+          <div class="badges">${scoreBadge}${countBadge}${starBadge}</div>
         `;
         item.addEventListener("click", () => selectSegment(index, true));
         segmentList.appendChild(item);
       });
+      if (!visibleCount) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "当前筛选没有句子。";
+        segmentList.appendChild(empty);
+      }
+      updateActiveSegment();
     }
 
     function selectSegment(index, jump) {
+      if (recorder && recorder.state === "recording") {
+        setNotice("请先停止当前录音，再切换句子。");
+        return;
+      }
+      if (!SEGMENTS.length) {
+        currentEn.textContent = "没有可练习句子";
+        currentZh.textContent = "";
+        currentStats.innerHTML = "";
+        recordBtn.disabled = true;
+        scoreBtn.disabled = true;
+        starBtn.disabled = true;
+        renderScore(null);
+        history.innerHTML = "";
+        return;
+      }
+
       currentIndex = Math.max(0, Math.min(SEGMENTS.length - 1, index));
-      const seg = SEGMENTS[currentIndex];
+      const seg = currentSegment();
       currentEn.textContent = seg.english;
       currentZh.textContent = seg.chinese || "";
-      document.querySelectorAll(".segment").forEach((el, i) => {
-        el.classList.toggle("active", i === currentIndex);
-      });
+      latestBlob = null;
+      recordingSegmentId = null;
+      mine.removeAttribute("src");
+      scoreBtn.disabled = true;
+      setNotice("");
+      renderCurrentStats();
+      renderCurrentHistory();
+      updateActiveSegment();
       if (jump) {
         video.currentTime = seg.start;
       }
     }
 
+    function updateActiveSegment() {
+      const seg = currentSegment();
+      document.querySelectorAll(".segment").forEach(el => {
+        el.classList.toggle("active", Boolean(seg) && el.dataset.segmentId === seg.id);
+      });
+    }
+
+    function renderCurrentStats() {
+      const seg = currentSegment();
+      if (!seg) return;
+      const stats = statsFor(seg.id);
+      const bestText = stats.best === null ? "暂无评分" : `最高分 ${stats.best}`;
+      const latestText = stats.latest === null ? "" : `最近 ${stats.latest}`;
+      const countText = `练习 ${stats.count} 次`;
+      currentStats.innerHTML = [
+        `<span class="pill ${stats.best >= 80 ? "good" : stats.best === null ? "" : "warn"}">${bestText}</span>`,
+        latestText ? `<span class="pill">${latestText}</span>` : "",
+        `<span class="pill">${countText}</span>`,
+        stats.starred ? `<span class="pill">已收藏</span>` : "",
+      ].join("");
+      starBtn.classList.toggle("primary", stats.starred);
+      starBtn.textContent = stats.starred ? "取消收藏" : "收藏本句";
+    }
+
+    function renderCurrentHistory() {
+      const seg = currentSegment();
+      if (!seg) return;
+      const attempts = attemptsFor(seg.id).slice(-5).reverse();
+      if (!attempts.length) {
+        renderScore(null);
+        history.innerHTML = "本句还没有练习记录。";
+        return;
+      }
+      const latest = attempts[0];
+      renderScore(latest);
+      history.innerHTML = attempts.map(item => `
+        <div class="history-row">
+          <span>${escapeHtml(formatDate(item.createdAt))}</span>
+          <strong>${Number.isFinite(Number(item.score)) ? item.score : "--"}</strong>
+        </div>
+      `).join("");
+    }
+
     function playCurrent() {
-      const seg = SEGMENTS[currentIndex];
+      const seg = currentSegment();
+      if (!seg) return;
       video.currentTime = seg.start;
       video.playbackRate = Number(rate.value);
       video.play();
     }
 
     video.addEventListener("timeupdate", () => {
-      const seg = SEGMENTS[currentIndex];
+      const seg = currentSegment();
       if (!seg) return;
       if (loop && video.currentTime >= seg.end) {
         video.currentTime = seg.start;
@@ -386,60 +698,202 @@
     rate.addEventListener("change", () => { video.playbackRate = Number(rate.value); });
 
     recordBtn.addEventListener("click", async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      chunks = [];
-      recorder = new MediaRecorder(stream);
-      recorder.ondataavailable = event => {
-        if (event.data.size > 0) chunks.push(event.data);
-      };
-      recorder.onstop = () => {
-        latestBlob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
-        mine.src = URL.createObjectURL(latestBlob);
-        scoreBtn.disabled = false;
-        stream.getTracks().forEach(track => track.stop());
-      };
-      recorder.start();
-      recordBtn.disabled = true;
-      stopBtn.disabled = false;
-      scoreBtn.disabled = true;
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        setNotice("当前浏览器不支持录音，请用新版 Chrome 或 Edge 打开。");
+        return;
+      }
+
+      const seg = currentSegment();
+      if (!seg) return;
+
+      try {
+        latestBlob = null;
+        chunks = [];
+        recordingSegmentId = seg.id;
+        mine.removeAttribute("src");
+        scoreBtn.disabled = true;
+        setNotice("正在录音，读完后点击停止。", "info");
+
+        recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const options = MediaRecorder.isTypeSupported?.("audio/webm") ? { mimeType: "audio/webm" } : {};
+        recorder = new MediaRecorder(recordingStream, options);
+        recorder.ondataavailable = event => {
+          if (event.data.size > 0) chunks.push(event.data);
+        };
+        recorder.onerror = event => {
+          setNotice(`录音失败：${event.error?.message || "浏览器录音错误"}`);
+          cleanupRecorder();
+        };
+        recorder.onstop = () => {
+          const type = recorder.mimeType || "audio/webm";
+          latestBlob = new Blob(chunks, { type });
+          cleanupRecorder();
+          if (!latestBlob.size) {
+            scoreBtn.disabled = true;
+            setNotice("没有录到声音，请重新录一次。");
+            return;
+          }
+          mine.src = URL.createObjectURL(latestBlob);
+          scoreBtn.disabled = false;
+          setNotice("录音完成，可以点击转写评分。", "info");
+        };
+        recorder.start();
+        recordBtn.disabled = true;
+        stopBtn.disabled = false;
+      } catch (error) {
+        cleanupRecorder();
+        latestBlob = null;
+        recordingSegmentId = null;
+        scoreBtn.disabled = true;
+        setNotice(`无法开始录音：${error.message}`);
+      }
     });
 
     stopBtn.addEventListener("click", () => {
-      if (recorder && recorder.state !== "inactive") recorder.stop();
-      recordBtn.disabled = false;
-      stopBtn.disabled = true;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop();
+      } else {
+        cleanupRecorder();
+      }
     });
 
     scoreBtn.addEventListener("click", async () => {
-      if (!latestBlob) return;
-      if (location.protocol === "file:") {
-        attemptMeta.textContent = "请用 serve_practice.py 启动本地服务后评分。";
+      if (!latestBlob) {
+        setNotice("请先录音。");
         return;
       }
+      if (location.protocol === "file:") {
+        setNotice("请用 serve_practice.py 启动本地服务后评分。");
+        return;
+      }
+
+      const segmentId = recordingSegmentId || currentSegment()?.id;
+      if (!segmentId) return;
+
       scoreBtn.disabled = true;
       attemptMeta.textContent = "评分中...";
-      const seg = SEGMENTS[currentIndex];
-      const res = await fetch(`/api/attempts?segment_id=${encodeURIComponent(seg.id)}`, {
-        method: "POST",
-        headers: { "Content-Type": latestBlob.type || "audio/webm" },
-        body: latestBlob
-      });
-      const data = await res.json();
-      renderScore(data);
-      scoreBtn.disabled = false;
+      setNotice("正在转写并评分，时间取决于本句长度。", "info");
+      try {
+        const response = await fetch(`/api/attempts?segment_id=${encodeURIComponent(segmentId)}`, {
+          method: "POST",
+          headers: { "Content-Type": latestBlob.type || "audio/webm" },
+          body: latestBlob,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.error) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        upsertAttempt(data);
+        latestBlob = null;
+        recordingSegmentId = null;
+        scoreBtn.disabled = true;
+        setNotice("本次评分已保存。", "info");
+        renderSegments();
+        renderCurrentStats();
+        renderCurrentHistory();
+      } catch (error) {
+        scoreBtn.disabled = false;
+        attemptMeta.textContent = "评分失败";
+        setNotice(`评分失败：${error.message}`);
+      }
     });
 
+    starBtn.addEventListener("click", async () => {
+      const seg = currentSegment();
+      if (!seg) return;
+
+      if (location.protocol === "file:") {
+        toggleLocalStar(seg.id);
+        setNotice("文件模式下收藏只在当前页面临时生效；启动本地服务后可保存。", "info");
+        renderSegments();
+        renderCurrentStats();
+        renderCurrentHistory();
+        return;
+      }
+
+      starBtn.disabled = true;
+      try {
+        const response = await fetch(`/api/stars?segment_id=${encodeURIComponent(seg.id)}`, {
+          method: "POST",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.error) {
+          throw new Error(data.error || `HTTP ${response.status}`);
+        }
+        appState = normalizeState(data.state || appState);
+        setNotice(data.starred ? "已收藏本句。" : "已取消收藏。", "info");
+        renderSegments();
+        renderCurrentStats();
+        renderCurrentHistory();
+      } catch (error) {
+        setNotice(`收藏失败：${error.message}`);
+      } finally {
+        starBtn.disabled = false;
+      }
+    });
+
+    function cleanupRecorder() {
+      recordBtn.disabled = false;
+      stopBtn.disabled = true;
+      if (recordingStream) {
+        recordingStream.getTracks().forEach(track => track.stop());
+        recordingStream = null;
+      }
+    }
+
+    function upsertAttempt(attempt) {
+      appState = normalizeState(appState);
+      const index = appState.attempts.findIndex(item => item.id === attempt.id);
+      if (index >= 0) {
+        appState.attempts[index] = attempt;
+      } else {
+        appState.attempts.push(attempt);
+      }
+    }
+
+    function toggleLocalStar(segmentId) {
+      const stars = new Set(appState.stars || []);
+      if (stars.has(segmentId)) {
+        stars.delete(segmentId);
+      } else {
+        stars.add(segmentId);
+      }
+      appState.stars = Array.from(stars).sort();
+    }
+
     function renderScore(data) {
+      if (!data) {
+        scoreValue.textContent = "--";
+        attemptMeta.textContent = "尚未评分";
+        transcript.textContent = "";
+        diff.innerHTML = "";
+        return;
+      }
+
       scoreValue.textContent = data.score ?? "--";
-      attemptMeta.textContent = data.createdAt ? `已保存：${data.createdAt}` : "已评分";
-      transcript.textContent = data.transcript ? `我的转写：${data.transcript}` : "";
+      attemptMeta.textContent = data.createdAt ? `已保存：${formatDate(data.createdAt)}` : "已评分";
+      transcript.textContent = data.transcript ? `我的转写：${data.transcript}` : "没有识别到有效英文。";
       diff.innerHTML = "";
-      (data.diff?.tokens || []).forEach(token => {
+      const tokens = data.diff?.tokens || [];
+      if (!tokens.length) {
+        diff.textContent = data.error || "";
+        return;
+      }
+      tokens.forEach(token => {
         const span = document.createElement("span");
         span.className = `token ${token.kind || ""}`;
         span.textContent = token.text;
         diff.appendChild(span);
       });
+    }
+
+    function setNotice(message, level = "warn") {
+      recordingNotice.textContent = message || "";
+      recordingNotice.classList.toggle("info", level === "info");
+    }
+
+    function formatDate(value) {
+      return value ? String(value).replace("T", " ") : "";
     }
 
     function escapeHtml(value) {
@@ -450,8 +904,7 @@
         .replaceAll('"', "&quot;");
     }
 
-    renderSegments();
-    selectSegment(0, false);
+    loadState();
   </script>
 </body>
 </html>
