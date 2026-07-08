@@ -143,6 +143,68 @@
       font-size: 25px;
     }
 
+    .video-progress {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: grid;
+      grid-template-columns: 58px minmax(0, 1fr) 58px;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 14px 10px;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.78));
+      color: #fff;
+      font-size: 12px;
+      line-height: 1;
+      z-index: 3;
+    }
+
+    .progress-range {
+      position: relative;
+      height: 18px;
+      cursor: pointer;
+      touch-action: none;
+      outline: none;
+    }
+
+    .progress-range::before,
+    .progress-fill {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 50%;
+      height: 4px;
+      border-radius: 999px;
+      transform: translateY(-50%);
+    }
+
+    .progress-range::before {
+      right: 0;
+      background: rgba(255, 255, 255, 0.36);
+    }
+
+    .progress-fill {
+      width: 0%;
+      background: var(--accent);
+    }
+
+    .progress-thumb {
+      position: absolute;
+      left: 0%;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.42);
+      transform: translate(-50%, -50%);
+    }
+
+    .progress-range:focus-visible .progress-thumb {
+      box-shadow: 0 0 0 3px rgba(11, 116, 144, 0.35), 0 1px 6px rgba(0, 0, 0, 0.42);
+    }
+
     .toolbar, .recording, .feedback-head, .filters, .status-line {
       display: flex;
       flex-wrap: wrap;
@@ -419,6 +481,12 @@
       .caption-zh {
         font-size: 17px;
       }
+
+      .video-progress {
+        grid-template-columns: 48px minmax(0, 1fr) 48px;
+        gap: 8px;
+        padding: 7px 10px 9px;
+      }
     }
   </style>
 </head>
@@ -426,10 +494,18 @@
   <main class="app">
     <section class="stage">
       <div class="video-wrap">
-        <video id="video" controls preload="metadata"></video>
+        <video id="video" preload="metadata"></video>
         <div class="video-captions hidden" id="videoCaptions">
           <div class="caption-en" id="captionEn"></div>
           <div class="caption-zh" id="captionZh"></div>
+        </div>
+        <div class="video-progress">
+          <span id="currentTimeText">00:00</span>
+          <div id="progressRange" class="progress-range" role="slider" tabindex="0" aria-label="视频进度" aria-valuemin="0" aria-valuemax="1000" aria-valuenow="0">
+            <div class="progress-fill" id="progressFill"></div>
+            <div class="progress-thumb" id="progressThumb"></div>
+          </div>
+          <span id="durationText">--:--</span>
         </div>
       </div>
 
@@ -493,6 +569,11 @@
     const videoCaptions = document.getElementById("videoCaptions");
     const captionEn = document.getElementById("captionEn");
     const captionZh = document.getElementById("captionZh");
+    const progressRange = document.getElementById("progressRange");
+    const progressFill = document.getElementById("progressFill");
+    const progressThumb = document.getElementById("progressThumb");
+    const currentTimeText = document.getElementById("currentTimeText");
+    const durationText = document.getElementById("durationText");
     const segmentList = document.getElementById("segments");
     const currentEn = document.getElementById("currentEn");
     const currentZh = document.getElementById("currentZh");
@@ -525,6 +606,9 @@
     let recordingSegmentId = null;
     let recordingStream = null;
     let activeFilter = "all";
+    let playbackMode = "idle";
+    let isSeeking = false;
+    let progressValue = 0;
     let appState = { schemaVersion: 1, attempts: [], stars: [] };
 
     video.src = encodeURI(META.practiceVideo || META.video || "bilingual.mp4");
@@ -685,9 +769,11 @@
       renderCurrentHistory();
       updateActiveSegment();
       if (jump) {
+        playbackMode = "idle";
         video.currentTime = seg.start;
       }
       renderVideoCaptions();
+      updateProgressFromVideo();
     }
 
     function updateActiveSegment() {
@@ -734,8 +820,9 @@
     }
 
     function playCurrent() {
-      const seg = currentSegment();
+      const seg = syncSegmentToVideoTime() || currentSegment();
       if (!seg) return;
+      playbackMode = "segment";
       loop = false;
       loopSegmentBtn.classList.remove("primary");
       video.currentTime = seg.start;
@@ -744,14 +831,16 @@
     }
 
     function pauseCurrent() {
+      playbackMode = "idle";
       loop = false;
       loopSegmentBtn.classList.remove("primary");
       video.pause();
     }
 
     function loopCurrent() {
-      const seg = currentSegment();
+      const seg = syncSegmentToVideoTime() || currentSegment();
       if (!seg) return;
+      playbackMode = "loop";
       loop = true;
       loopSegmentBtn.classList.add("primary");
       video.currentTime = seg.start;
@@ -760,19 +849,46 @@
     }
 
     video.addEventListener("timeupdate", () => {
+      if (playbackMode !== "segment" && playbackMode !== "loop") {
+        syncSegmentToVideoTime();
+      }
       const seg = currentSegment();
-      if (!seg) return;
       renderVideoCaptions();
+      updateProgressFromVideo();
+      if (!seg) return;
       if (loop && video.currentTime >= seg.end) {
         video.currentTime = seg.start;
         video.play();
-      } else if (!loop && video.currentTime >= seg.end && video.currentTime - seg.end < 0.4) {
+      } else if (playbackMode === "segment" && video.currentTime >= seg.end && video.currentTime - seg.end < 0.4) {
         video.pause();
+        playbackMode = "idle";
       }
     });
-    video.addEventListener("loadedmetadata", renderVideoCaptions);
-    video.addEventListener("seeked", renderVideoCaptions);
-    video.addEventListener("play", renderVideoCaptions);
+    video.addEventListener("loadedmetadata", () => {
+      renderVideoCaptions();
+      updateProgressFromVideo();
+    });
+    video.addEventListener("seeked", () => {
+      if (playbackMode !== "segment" && playbackMode !== "loop") {
+        syncSegmentToVideoTime();
+      }
+      renderVideoCaptions();
+      updateProgressFromVideo();
+    });
+    video.addEventListener("play", () => {
+      if (playbackMode === "idle") {
+        playbackMode = "free";
+      }
+      renderVideoCaptions();
+      updateProgressFromVideo();
+    });
+    video.addEventListener("pause", updateProgressFromVideo);
+    video.addEventListener("ended", () => {
+      playbackMode = "idle";
+      loop = false;
+      loopSegmentBtn.classList.remove("primary");
+      updateProgressFromVideo();
+    });
 
     playSegmentBtn.addEventListener("click", playCurrent);
     loopSegmentBtn.addEventListener("click", loopCurrent);
@@ -780,6 +896,42 @@
     nextSegmentBtn.addEventListener("click", () => selectSegment(currentIndex + 1, true));
     pauseSegmentBtn.addEventListener("click", pauseCurrent);
     rate.addEventListener("change", () => { video.playbackRate = Number(rate.value); });
+    progressRange.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      isSeeking = true;
+      progressRange.setPointerCapture?.(event.pointerId);
+      seekToProgressValue(progressValueFromPointer(event));
+    });
+    progressRange.addEventListener("pointermove", (event) => {
+      if (!isSeeking) return;
+      event.preventDefault();
+      seekToProgressValue(progressValueFromPointer(event));
+    });
+    progressRange.addEventListener("pointerup", (event) => {
+      if (!isSeeking) return;
+      event.preventDefault();
+      seekToProgressValue(progressValueFromPointer(event));
+      isSeeking = false;
+      progressRange.releasePointerCapture?.(event.pointerId);
+      updateProgressFromVideo();
+    });
+    progressRange.addEventListener("pointercancel", (event) => {
+      isSeeking = false;
+      progressRange.releasePointerCapture?.(event.pointerId);
+      updateProgressFromVideo();
+    });
+    progressRange.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 50 : 10;
+      let nextValue = progressValue;
+      if (event.key === "ArrowLeft") nextValue -= step;
+      else if (event.key === "ArrowRight") nextValue += step;
+      else if (event.key === "Home") nextValue = 0;
+      else if (event.key === "End") nextValue = 1000;
+      else return;
+      event.preventDefault();
+      seekToProgressValue(nextValue);
+      updateProgressFromVideo();
+    });
 
     recordBtn.addEventListener("click", async () => {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -972,7 +1124,27 @@
     }
 
     function segmentAtTime(time) {
-      return SEGMENTS.find(seg => time >= seg.start - 0.08 && time <= seg.end + 0.08) || null;
+      const index = segmentIndexAtTime(time);
+      return index >= 0 ? SEGMENTS[index] : null;
+    }
+
+    function segmentIndexAtTime(time) {
+      return SEGMENTS.findIndex(seg => time >= seg.start - 0.08 && time <= seg.end + 0.08);
+    }
+
+    function syncSegmentToVideoTime() {
+      if (recorder && recorder.state === "recording") return currentSegment();
+      const index = segmentIndexAtTime(video.currentTime);
+      if (index < 0) return currentSegment();
+      if (index === currentIndex) return currentSegment();
+      currentIndex = index;
+      const seg = currentSegment();
+      currentEn.textContent = seg.english;
+      currentZh.textContent = seg.chinese || "";
+      renderCurrentStats();
+      renderCurrentHistory();
+      updateActiveSegment();
+      return seg;
     }
 
     function renderVideoCaptions() {
@@ -986,6 +1158,55 @@
       captionEn.textContent = seg.english;
       captionZh.textContent = seg.chinese || "";
       videoCaptions.classList.toggle("hidden", !seg.english && !seg.chinese);
+    }
+
+    function seekToProgressValue(value) {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      if (!duration) return;
+      value = clampProgressValue(value);
+      setProgressDisplay(value);
+      playbackMode = video.paused ? "idle" : "free";
+      video.currentTime = (value / 1000) * duration;
+      syncSegmentToVideoTime();
+      renderVideoCaptions();
+      updateProgressFromVideo();
+    }
+
+    function updateProgressFromVideo() {
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const current = Number.isFinite(video.currentTime) ? video.currentTime : 0;
+      if (!isSeeking) {
+        setProgressDisplay(duration ? Math.round((current / duration) * 1000) : 0);
+      }
+      currentTimeText.textContent = formatClock(current);
+      durationText.textContent = duration ? formatClock(duration) : "--:--";
+    }
+
+    function progressValueFromPointer(event) {
+      const rect = progressRange.getBoundingClientRect();
+      const ratio = rect.width ? (event.clientX - rect.left) / rect.width : 0;
+      return clampProgressValue(ratio * 1000);
+    }
+
+    function clampProgressValue(value) {
+      return Math.max(0, Math.min(1000, Math.round(Number(value) || 0)));
+    }
+
+    function setProgressDisplay(value) {
+      progressValue = clampProgressValue(value);
+      const percent = progressValue / 10;
+      progressFill.style.width = `${percent}%`;
+      progressThumb.style.left = `${percent}%`;
+      progressRange.setAttribute("aria-valuenow", String(progressValue));
+    }
+
+    function formatClock(seconds) {
+      seconds = Math.max(0, Math.floor(Number(seconds) || 0));
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
     }
 
     function setNotice(message, level = "warn") {
