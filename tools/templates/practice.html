@@ -102,6 +102,7 @@
       width: 100%;
       aspect-ratio: 16 / 9;
       background: #111;
+      cursor: pointer;
     }
 
     .video-captions {
@@ -510,6 +511,7 @@
       </div>
 
       <div class="toolbar">
+        <button id="playVideo">播放视频</button>
         <button id="playSegment" class="primary">播放本句</button>
         <button id="loopSegment">循环本句</button>
         <button id="prevSegment">上一句</button>
@@ -579,6 +581,7 @@
     const currentZh = document.getElementById("currentZh");
     const serverState = document.getElementById("serverState");
     const projectTitle = document.getElementById("projectTitle");
+    const playVideoBtn = document.getElementById("playVideo");
     const playSegmentBtn = document.getElementById("playSegment");
     const loopSegmentBtn = document.getElementById("loopSegment");
     const prevSegmentBtn = document.getElementById("prevSegment");
@@ -830,6 +833,22 @@
       video.play();
     }
 
+    function playVideo() {
+      playbackMode = "free";
+      loop = false;
+      loopSegmentBtn.classList.remove("primary");
+      video.playbackRate = Number(rate.value);
+      video.play();
+    }
+
+    function toggleVideoPlayback() {
+      if (video.paused || video.ended) {
+        playVideo();
+      } else {
+        pauseCurrent();
+      }
+    }
+
     function pauseCurrent() {
       playbackMode = "idle";
       loop = false;
@@ -879,17 +898,24 @@
       if (playbackMode === "idle") {
         playbackMode = "free";
       }
+      playVideoBtn.textContent = "暂停视频";
       renderVideoCaptions();
       updateProgressFromVideo();
     });
-    video.addEventListener("pause", updateProgressFromVideo);
+    video.addEventListener("pause", () => {
+      playVideoBtn.textContent = "播放视频";
+      updateProgressFromVideo();
+    });
     video.addEventListener("ended", () => {
       playbackMode = "idle";
       loop = false;
       loopSegmentBtn.classList.remove("primary");
+      playVideoBtn.textContent = "播放视频";
       updateProgressFromVideo();
     });
 
+    video.addEventListener("click", toggleVideoPlayback);
+    playVideoBtn.addEventListener("click", toggleVideoPlayback);
     playSegmentBtn.addEventListener("click", playCurrent);
     loopSegmentBtn.addEventListener("click", loopCurrent);
     prevSegmentBtn.addEventListener("click", () => selectSegment(currentIndex - 1, true));
@@ -1129,7 +1155,22 @@
     }
 
     function segmentIndexAtTime(time) {
-      return SEGMENTS.findIndex(seg => time >= seg.start - 0.08 && time <= seg.end + 0.08);
+      if (!Number.isFinite(time)) return -1;
+      const exact = SEGMENTS.findIndex(seg => time >= seg.start && time < seg.end);
+      if (exact >= 0) return exact;
+
+      const tolerance = 0.08;
+      let nearestIndex = -1;
+      let nearestDistance = Infinity;
+      SEGMENTS.forEach((seg, index) => {
+        if (time < seg.start - tolerance || time > seg.end + tolerance) return;
+        const distance = time < seg.start ? seg.start - time : time - seg.end;
+        if (distance <= nearestDistance) {
+          nearestDistance = distance;
+          nearestIndex = index;
+        }
+      });
+      return nearestIndex;
     }
 
     function syncSegmentToVideoTime() {
