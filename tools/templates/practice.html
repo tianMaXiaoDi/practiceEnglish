@@ -105,6 +105,45 @@
       cursor: pointer;
     }
 
+    .video-play-overlay {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 4;
+      width: 64px;
+      height: 64px;
+      min-height: 64px;
+      padding: 0;
+      border: 1px solid rgba(255, 255, 255, 0.82);
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.68);
+      color: #fff;
+      transform: translate(-50%, -50%);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+
+    .video-play-overlay::before {
+      content: "";
+      display: block;
+      width: 0;
+      height: 0;
+      margin-left: 25px;
+      border-top: 11px solid transparent;
+      border-bottom: 11px solid transparent;
+      border-left: 17px solid currentColor;
+    }
+
+    .video-play-overlay:hover,
+    .video-play-overlay:focus-visible {
+      background: rgba(0, 0, 0, 0.82);
+      transform: translate(-50%, -50%) scale(1.04);
+    }
+
+    .video-play-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
     .video-captions {
       position: absolute;
       left: 5%;
@@ -496,6 +535,7 @@
     <section class="stage">
       <div class="video-wrap">
         <video id="video" preload="metadata"></video>
+        <button id="videoPlayOverlay" class="video-play-overlay" type="button" aria-label="播放视频" title="播放视频"></button>
         <div class="video-captions hidden" id="videoCaptions">
           <div class="caption-en" id="captionEn"></div>
           <div class="caption-zh" id="captionZh"></div>
@@ -581,6 +621,7 @@
     const currentZh = document.getElementById("currentZh");
     const serverState = document.getElementById("serverState");
     const projectTitle = document.getElementById("projectTitle");
+    const videoPlayOverlay = document.getElementById("videoPlayOverlay");
     const playVideoBtn = document.getElementById("playVideo");
     const playSegmentBtn = document.getElementById("playSegment");
     const loopSegmentBtn = document.getElementById("loopSegment");
@@ -610,6 +651,7 @@
     let recordingStream = null;
     let activeFilter = "all";
     let playbackMode = "idle";
+    let pendingSegmentIndex = null;
     let isSeeking = false;
     let progressValue = 0;
     let appState = { schemaVersion: 1, attempts: [], stars: [] };
@@ -772,10 +814,11 @@
       renderCurrentHistory();
       updateActiveSegment();
       if (jump) {
-        playbackMode = "idle";
-        video.currentTime = seg.start;
+        pendingSegmentIndex = currentIndex;
+        playbackMode = video.paused ? "idle" : "free";
+        video.currentTime = Math.min(seg.start + 0.001, seg.end);
       }
-      renderVideoCaptions();
+      renderVideoCaptions(seg);
       updateProgressFromVideo();
     }
 
@@ -825,6 +868,7 @@
     function playCurrent() {
       const seg = syncSegmentToVideoTime() || currentSegment();
       if (!seg) return;
+      pendingSegmentIndex = null;
       playbackMode = "segment";
       loop = false;
       loopSegmentBtn.classList.remove("primary");
@@ -834,6 +878,7 @@
     }
 
     function playVideo() {
+      pendingSegmentIndex = null;
       playbackMode = "free";
       loop = false;
       loopSegmentBtn.classList.remove("primary");
@@ -850,6 +895,7 @@
     }
 
     function pauseCurrent() {
+      pendingSegmentIndex = null;
       playbackMode = "idle";
       loop = false;
       loopSegmentBtn.classList.remove("primary");
@@ -859,6 +905,7 @@
     function loopCurrent() {
       const seg = syncSegmentToVideoTime() || currentSegment();
       if (!seg) return;
+      pendingSegmentIndex = null;
       playbackMode = "loop";
       loop = true;
       loopSegmentBtn.classList.add("primary");
@@ -868,7 +915,7 @@
     }
 
     video.addEventListener("timeupdate", () => {
-      if (playbackMode !== "segment" && playbackMode !== "loop") {
+      if (pendingSegmentIndex === null && playbackMode !== "segment" && playbackMode !== "loop") {
         syncSegmentToVideoTime();
       }
       const seg = currentSegment();
@@ -888,7 +935,16 @@
       updateProgressFromVideo();
     });
     video.addEventListener("seeked", () => {
-      if (playbackMode !== "segment" && playbackMode !== "loop") {
+      if (pendingSegmentIndex !== null) {
+        currentIndex = pendingSegmentIndex;
+        pendingSegmentIndex = null;
+        const seg = currentSegment();
+        currentEn.textContent = seg.english;
+        currentZh.textContent = seg.chinese || "";
+        renderCurrentStats();
+        renderCurrentHistory();
+        updateActiveSegment();
+      } else if (playbackMode !== "segment" && playbackMode !== "loop") {
         syncSegmentToVideoTime();
       }
       renderVideoCaptions();
@@ -899,11 +955,13 @@
         playbackMode = "free";
       }
       playVideoBtn.textContent = "暂停视频";
+      videoPlayOverlay.classList.add("hidden");
       renderVideoCaptions();
       updateProgressFromVideo();
     });
     video.addEventListener("pause", () => {
       playVideoBtn.textContent = "播放视频";
+      videoPlayOverlay.classList.remove("hidden");
       updateProgressFromVideo();
     });
     video.addEventListener("ended", () => {
@@ -911,10 +969,12 @@
       loop = false;
       loopSegmentBtn.classList.remove("primary");
       playVideoBtn.textContent = "播放视频";
+      videoPlayOverlay.classList.remove("hidden");
       updateProgressFromVideo();
     });
 
     video.addEventListener("click", toggleVideoPlayback);
+    videoPlayOverlay.addEventListener("click", toggleVideoPlayback);
     playVideoBtn.addEventListener("click", toggleVideoPlayback);
     playSegmentBtn.addEventListener("click", playCurrent);
     loopSegmentBtn.addEventListener("click", loopCurrent);
@@ -1175,6 +1235,7 @@
 
     function syncSegmentToVideoTime() {
       if (recorder && recorder.state === "recording") return currentSegment();
+      if (pendingSegmentIndex !== null) return SEGMENTS[pendingSegmentIndex] || currentSegment();
       const index = segmentIndexAtTime(video.currentTime);
       if (index < 0) return currentSegment();
       if (index === currentIndex) return currentSegment();
@@ -1188,8 +1249,8 @@
       return seg;
     }
 
-    function renderVideoCaptions() {
-      const seg = segmentAtTime(video.currentTime) || currentSegment();
+    function renderVideoCaptions(selectedSegment = null) {
+      const seg = selectedSegment || segmentAtTime(video.currentTime) || currentSegment();
       if (!seg) {
         videoCaptions.classList.add("hidden");
         captionEn.textContent = "";

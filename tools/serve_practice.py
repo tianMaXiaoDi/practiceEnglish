@@ -1,6 +1,7 @@
 import argparse
 import json
 import mimetypes
+import os
 import re
 import shutil
 import subprocess
@@ -146,7 +147,87 @@ def make_handler(project_dir, ffmpeg, whisper_cli, model):
 
     class PracticeHandler(SimpleHTTPRequestHandler):
         def __init__(self, *args, **kwargs):
+            self._byte_range = None
             super().__init__(*args, directory=str(project_dir), **kwargs)
+
+        def end_headers(self):
+            path = urlparse(self.path).path
+            if path in {"/", "/practice.html"}:
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
+            if Path(path).suffix.lower() in {".mp4", ".webm", ".m4a", ".mp3", ".wav"}:
+                self.send_header("Accept-Ranges", "bytes")
+            super().end_headers()
+
+        def send_head(self):
+            self._byte_range = None
+            range_header = self.headers.get("Range")
+            if not range_header:
+                return super().send_head()
+
+            path = Path(self.translate_path(self.path))
+            if not path.is_file():
+                return super().send_head()
+
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+            if not match or not any(match.groups()):
+                self.send_error(416, "Invalid byte range")
+                return None
+
+            size = path.stat().st_size
+            start_text, end_text = match.groups()
+            if start_text:
+                start = int(start_text)
+                end = int(end_text) if end_text else size - 1
+            else:
+                suffix_length = int(end_text)
+                if suffix_length <= 0:
+                    self.send_error(416, "Invalid byte range")
+                    return None
+                start = max(0, size - suffix_length)
+                end = size - 1
+
+            if start >= size or end < start:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return None
+
+            end = min(end, size - 1)
+            content_length = end - start + 1
+            file_obj = path.open("rb")
+            try:
+                stat = os.fstat(file_obj.fileno())
+                self.send_response(206)
+                self.send_header("Content-Type", self.guess_type(str(path)))
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+                self.send_header("Content-Length", str(content_length))
+                self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+                self.end_headers()
+                file_obj.seek(start)
+                self._byte_range = (start, end)
+                return file_obj
+            except Exception:
+                file_obj.close()
+                raise
+
+        def copyfile(self, source, outputfile):
+            if self._byte_range is None:
+                return super().copyfile(source, outputfile)
+
+            start, end = self._byte_range
+            remaining = end - start + 1
+            while remaining > 0:
+                chunk = source.read(min(64 * 1024, remaining))
+                if not chunk:
+                    break
+                try:
+                    outputfile.write(chunk)
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+                remaining -= len(chunk)
 
         def _json(self, status, payload):
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
